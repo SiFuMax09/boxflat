@@ -38,11 +38,20 @@ Boxflat for Moza Racing. Control your Moza gear settings... and more!
 | Generic devices | Detection fix | |
 
 ### Ideas
-- Telemetry ingestion through REST API/WebSockets
 - Cammus support
 - PXN Support
 - Simagic support
 - H-Pattern and Sequential settings available for arbitrary HID devices
+
+### Telemetry bridge (all racing games)
+Boxflat now listens for external telemetry on UDP `127.0.0.1:27194` (override with `BOXFLAT_TELEMETRY_PORT`).
+
+Send JSON with one of these formats:
+- `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
+- `{"rpm_percent": 50}` or `{"rpm_ratio": 0.5}`
+- `{"rpm": 5000, "max_rpm": 10000}`
+
+This lets any game/tool drive the RPM indicator by forwarding telemetry in a simple common format.
 
 ### Firmware upgrades
 There are some EEPROM functions available, but I need to do more testing to make sure I won't brick anything. For now, just use Pit House on Windows if you can, as FW upgrade support is not coming in the near future.

@@ -10,6 +10,7 @@ from boxflat.panels import *
 from boxflat.connection_manager import MozaConnectionManager
 from boxflat.hid_handler import HidHandler
 from boxflat.settings_handler import SettingsHandler
+from boxflat.telemetry_bridge import TelemetryBridge
 from threading import Thread, Event
 
 import os
@@ -134,6 +135,7 @@ class MyApp(Adw.Application):
     def __init__(self, data_path: str, config_path: str, dry_run: bool, custom: bool, autostart: bool,**kwargs):
         super().__init__(**kwargs)
         self.connect('activate', self.on_activate)
+        self.connect('shutdown', self._shutdown)
 
         self.Tray = None
 
@@ -155,6 +157,7 @@ class MyApp(Adw.Application):
         self._cm = MozaConnectionManager(os.path.join(data_path, "serial.yml"), dry_run)
         self._cm.subscribe("hid-device-connected", self._hid_handler.add_device)
         self._cm.subscribe("hid-device-disconnected", self._hid_handler.remove_device)
+        self._telemetry_bridge = TelemetryBridge(self._cm)
 
         with open(os.path.join(data_path, "version"), "r") as version:
             self._version = version.readline().strip()
@@ -332,6 +335,7 @@ class MyApp(Adw.Application):
 
 
     def _shutdown(self, *_) -> None:
+        self._telemetry_bridge.shutdown()
         for panel in self._panels.values():
             panel.shutdown()
 
