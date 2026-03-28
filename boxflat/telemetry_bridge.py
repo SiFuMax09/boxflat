@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from boxflat.connection_manager import MozaConnectionManager
 
+PERCENT_SCALE = 100
+
 
 class TelemetryBridge:
     def __init__(self, connection_manager: "MozaConnectionManager") -> None:
@@ -19,50 +21,53 @@ class TelemetryBridge:
         self._last_mask = -1
 
         self._host = "127.0.0.1"
-        self._port = int(os.environ.get("BOXFLAT_TELEMETRY_PORT", "27194"))
+        try:
+            self._port = int(os.environ.get("BOXFLAT_TELEMETRY_PORT", "27194"))
+        except ValueError:
+            print("Invalid BOXFLAT_TELEMETRY_PORT, falling back to 27194")
+            self._port = 27194
 
         self._thread = Thread(target=self._worker, daemon=True)
         self._thread.start()
 
 
-    def shutdown(self, *_) -> None:
+    def shutdown(self) -> None:
         self._shutdown.set()
 
 
     def _worker(self) -> None:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            sock.bind((self._host, self._port))
-        except OSError as e:
-            print(f"Telemetry bridge disabled: {e}")
-            sock.close()
-            return
-
-        sock.settimeout(1)
-        print(f"Telemetry bridge listening on udp://{self._host}:{self._port}")
-
-        while not self._shutdown.is_set():
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             try:
-                payload, _ = sock.recvfrom(4096)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
+                sock.bind((self._host, self._port))
+            except OSError as e:
+                print(f"Telemetry bridge disabled: {e}")
+                return
 
-            mask = self._packet_to_mask(payload)
-            if mask is None or mask == self._last_mask:
-                continue
+            sock.settimeout(1)
+            print(f"Telemetry bridge listening on udp://{self._host}:{self._port}")
 
-            self._last_mask = mask
-            self._cm.set_setting([mask & 255, mask >> 8], "wheel-send-rpm-telemetry")
-            self._cm.set_setting(mask, "dash-send-telemetry")
+            while not self._shutdown.is_set():
+                try:
+                    payload, _ = sock.recvfrom(4096)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
 
-        sock.close()
+                mask = self._packet_to_mask(payload)
+                if mask is None or mask == self._last_mask:
+                    continue
+
+                self._last_mask = mask
+                self._cm.set_setting([mask & 255, mask >> 8], "wheel-send-rpm-telemetry")
+                self._cm.set_setting(mask, "dash-send-telemetry")
 
 
     def _packet_to_mask(self, payload: bytes) -> int | None:
         try:
-            data = json.loads(payload.decode(errors="ignore"))
+            data = json.loads(payload.decode())
+        except UnicodeDecodeError:
+            return None
         except json.JSONDecodeError:
             return None
 
@@ -80,8 +85,11 @@ class TelemetryBridge:
             if rpm is None or max_rpm is None or max_rpm <= 0:
                 return None
             ratio = rpm / max_rpm
-        elif ratio > 1:
-            ratio = ratio / 100
+        # Treat values in (1, 100] as percentages while keeping ratio=1.0 as 100%.
+        elif ratio > 1 and ratio <= PERCENT_SCALE:
+            ratio = ratio / PERCENT_SCALE
+        elif ratio > PERCENT_SCALE:
+            return None
 
         ratio = max(0, min(1, ratio))
         lit_leds = int(round(ratio * 10))

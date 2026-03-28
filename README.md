@@ -51,6 +51,8 @@ Send JSON with one of these formats:
 - `{"rpm_percent": 50}` or `{"rpm_ratio": 0.5}`
 - `{"rpm": 5000, "max_rpm": 10000}`
 
+`rpm_led_mask` accepts arbitrary 10-bit patterns (not only progressive fill patterns), for example `{"rpm_led_mask": 682}`.
+
 This lets any game/tool drive the RPM indicator by forwarding telemetry in a simple common format.
 
 ### Firmware upgrades
