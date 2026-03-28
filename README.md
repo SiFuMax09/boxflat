@@ -48,7 +48,7 @@ Boxflat now listens for external telemetry on UDP `127.0.0.1:27194` (override wi
 
 Send JSON with one of these formats:
 - `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
-- `{"rpm_percent": 50}` or `{"rpm_ratio": 0.5}`
+- `{"rpm_percent": 50}` (0-100) or `{"rpm_ratio": 0.5}` (0.0-1.0)
 - `{"rpm": 5000, "max_rpm": 10000}`
 
 `rpm_led_mask` accepts arbitrary 10-bit patterns (not only progressive fill patterns), for example `{"rpm_led_mask": 682}` for an alternating LED pattern.

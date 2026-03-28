@@ -21,19 +21,18 @@ class TelemetryBridge:
         self._last_mask = -1
 
         self._host = "127.0.0.1"
+        env_port = os.environ.get("BOXFLAT_TELEMETRY_PORT", "27194")
         try:
-            self._port = int(os.environ.get("BOXFLAT_TELEMETRY_PORT", "27194"))
+            self._port = int(env_port)
         except ValueError:
-            print("Invalid BOXFLAT_TELEMETRY_PORT, falling back to 27194")
+            print(f"Invalid BOXFLAT_TELEMETRY_PORT value '{env_port}', falling back to 27194")
             self._port = 27194
 
         self._thread = Thread(target=self._worker, daemon=True)
         self._thread.start()
 
-
     def shutdown(self) -> None:
         self._shutdown.set()
-
 
     def _worker(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -59,9 +58,9 @@ class TelemetryBridge:
                     continue
 
                 self._last_mask = mask
+                # Wheel command payload is two bytes (LSB/MSB), while dash accepts full int mask.
                 self._cm.set_setting([mask & 255, mask >> 8], "wheel-send-rpm-telemetry")
                 self._cm.set_setting(mask, "dash-send-telemetry")
-
 
     def _packet_to_mask(self, payload: bytes) -> int | None:
         try:
@@ -78,23 +77,25 @@ class TelemetryBridge:
         if direct_mask is not None:
             return max(0, min(1023, int(direct_mask)))
 
-        ratio = self._first_number(data, "rpm_percent", "rpmPercent", "rpm_ratio", "rpmRatio")
+        ratio = self._first_number(data, "rpm_percent", "rpmPercent")
+        if ratio is not None:
+            if ratio < 0 or ratio > PERCENT_SCALE:
+                return None
+            ratio = ratio / PERCENT_SCALE
+        else:
+            ratio = self._first_number(data, "rpm_ratio", "rpmRatio")
         if ratio is None:
             rpm = self._first_number(data, "rpm", "engine_rpm", "engineRpm", "current_rpm", "currentRpm")
             max_rpm = self._first_number(data, "max_rpm", "maxRpm", "maxRPM", "rpm_max", "redline")
             if rpm is None or max_rpm is None or max_rpm <= 0:
                 return None
             ratio = rpm / max_rpm
-        # Treat values in (1, 100] as percentages while keeping ratio=1.0 as 100%.
-        elif ratio > 1 and ratio <= PERCENT_SCALE:
-            ratio = ratio / PERCENT_SCALE
-        elif ratio > PERCENT_SCALE:
+        elif ratio > 1:
             return None
 
         ratio = max(0, min(1, ratio))
         lit_leds = int(round(ratio * 10))
         return (1 << lit_leds) - 1 if lit_leds > 0 else 0
-
 
     def _first_number(self, data: dict, *keys: str) -> float | None:
         for key in keys:
