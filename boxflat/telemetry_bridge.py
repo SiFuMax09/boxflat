@@ -12,27 +12,34 @@ if TYPE_CHECKING:
     from boxflat.connection_manager import MozaConnectionManager
 
 PERCENT_SCALE = 100
+DEFAULT_TELEMETRY_PORT = 27194
+DEFAULT_TELEMETRY_ENABLED = True
+TELEMETRY_SHUTDOWN_TIMEOUT = 1
 
 
 class TelemetryBridge:
-    def __init__(self, connection_manager: "MozaConnectionManager") -> None:
+    def __init__(self, connection_manager: "MozaConnectionManager", port: int = DEFAULT_TELEMETRY_PORT, enabled: bool = DEFAULT_TELEMETRY_ENABLED) -> None:
         self._cm = connection_manager
         self._shutdown = Event()
         self._last_mask = -1
+        self._enabled = enabled
 
         self._host = "127.0.0.1"
-        env_port = os.environ.get("BOXFLAT_TELEMETRY_PORT", "27194")
-        try:
-            self._port = int(env_port)
-        except ValueError:
-            print(f"Invalid BOXFLAT_TELEMETRY_PORT value '{env_port}', falling back to 27194")
-            self._port = 27194
+        self._port = port
 
-        self._thread = Thread(target=self._worker, daemon=True)
-        self._thread.start()
+        if self._enabled:
+            self._thread = Thread(target=self._worker, daemon=True)
+            self._thread.start()
+        else:
+            self._thread = None
+
 
     def shutdown(self) -> None:
         self._shutdown.set()
+        # Bridge loop uses a 1s socket timeout, so bounded join is sufficient here.
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=TELEMETRY_SHUTDOWN_TIMEOUT)
+
 
     def _worker(self) -> None:
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
@@ -61,6 +68,7 @@ class TelemetryBridge:
                 # Wheel command payload is two bytes (LSB/MSB), while dash accepts full int mask.
                 self._cm.set_setting([mask & 255, mask >> 8], "wheel-send-rpm-telemetry")
                 self._cm.set_setting(mask, "dash-send-telemetry")
+
 
     def _packet_to_mask(self, payload: bytes) -> int | None:
         try:
@@ -97,6 +105,7 @@ class TelemetryBridge:
         lit_leds = int(round(ratio * 10))
         return (1 << lit_leds) - 1 if lit_leds > 0 else 0
 
+
     def _first_number(self, data: dict, *keys: str) -> float | None:
         for key in keys:
             if key not in data:
@@ -109,3 +118,15 @@ class TelemetryBridge:
             if isinstance(value, int | float):
                 return value
         return None
+
+
+def get_telemetry_bridge_port(default: int = DEFAULT_TELEMETRY_PORT) -> int:
+    env_port = os.environ.get("BOXFLAT_TELEMETRY_PORT")
+    if env_port is None:
+        return default
+
+    try:
+        return int(env_port)
+    except ValueError:
+        print(f"Invalid BOXFLAT_TELEMETRY_PORT value '{env_port}', falling back to {default}")
+        return default

@@ -44,7 +44,9 @@ Boxflat for Moza Racing. Control your Moza gear settings... and more!
 - H-Pattern and Sequential settings available for arbitrary HID devices
 
 ### Telemetry bridge (all racing games)
-Boxflat now listens for external telemetry on UDP `127.0.0.1:27194` (override with `BOXFLAT_TELEMETRY_PORT`).
+Boxflat now listens for external telemetry on UDP `127.0.0.1:27194`.
+You can change this in the UI under **Other → Application settings** (`Enable telemetry bridge` and `Telemetry bridge UDP port`).
+On first launch, `BOXFLAT_TELEMETRY_PORT` is still respected as the initial default.
 
 Send JSON with one of these formats:
 - `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
