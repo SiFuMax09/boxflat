@@ -55,9 +55,9 @@ So Boxflat uses one generic input path: a local UDP JSON bridge.
 If your game is not writing to that bridge, Boxflat has no RPM data to display.
 
 #### ACC specifics
-ACC telemetry is typically exposed via game UDP/shared-memory interfaces, while Boxflat listens only for local UDP JSON on `127.0.0.1:27194`.
-That means ACC data needs a small adapter layer (`ACC source -> Boxflat JSON bridge`) before Boxflat can show RPM LEDs.
-In practice, this is why tools on Windows can appear "direct" (game-specific integration), but Boxflat keeps one generic bridge input format across games.
+Boxflat now reads ACC RPM directly from ACC shared memory when available, and still supports the UDP JSON bridge on `127.0.0.1:27194`.
+So ACC can drive RPM LEDs without a separate adapter in the common local setup.
+If shared memory is unavailable, you can still use an external adapter that forwards JSON telemetry to the bridge port.
 
 Send JSON with one of these formats:
 - `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
