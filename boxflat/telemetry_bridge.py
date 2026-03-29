@@ -11,7 +11,7 @@ import struct
 import sys
 import time
 from threading import Event, Lock, Thread
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, BinaryIO
 
 if TYPE_CHECKING:
     from boxflat.connection_manager import MozaConnectionManager
@@ -184,14 +184,20 @@ class TelemetryBridge:
             return None
 
 
-    def _open_linux_map(self, paths: tuple[str, ...]) -> tuple[object | None, mmap.mmap | None]:
+    def _open_linux_map(self, paths: tuple[str, ...]) -> tuple[BinaryIO | None, mmap.mmap | None]:
         for path in paths:
             try:
                 file_handle = open(path, "rb")
-                mm = mmap.mmap(file_handle.fileno(), 0, access=mmap.ACCESS_READ)
-                return file_handle, mm
             except OSError:
                 continue
+
+            try:
+                mm = mmap.mmap(file_handle.fileno(), 0, access=mmap.ACCESS_READ)
+            except (OSError, ValueError):
+                file_handle.close()
+                continue
+
+            return file_handle, mm
         return None, None
 
 
@@ -208,14 +214,14 @@ class TelemetryBridge:
                 pass
 
 
-    def _read_acc_rpm_data(self, maps: dict) -> tuple[int, int] | None:
+    @staticmethod
+    def _read_acc_rpm_data(maps: dict) -> tuple[int, int] | None:
         try:
             physics = maps["physics"]
             static = maps["static"]
             rpm = struct.unpack_from("<i", physics, ACC_PHYSICS_RPM_OFFSET)[0]
             max_rpm = struct.unpack_from("<i", static, ACC_STATIC_MAX_RPM_OFFSET)[0]
         except (OSError, ValueError, struct.error):
-            self._debug_log("ACC shared memory source unavailable, retrying")
             return None
         return rpm, max_rpm
 
