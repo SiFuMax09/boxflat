@@ -49,6 +49,11 @@ You can change this in the UI under **Other → Application settings** (`Enable 
 On first launch, `BOXFLAT_TELEMETRY_PORT` is still respected as the initial default.
 Most games (including ACC) do not send this JSON format directly, so you must run/enable a telemetry adapter that forwards game telemetry to this UDP port.
 
+#### Why does Pit House on Windows show RPM directly?
+Pit House can use game-specific plugins/integrations on Windows, while Boxflat on Linux does not ship those closed game plugins.
+So Boxflat uses one generic input path: a local UDP JSON bridge.  
+If your game is not writing to that bridge, Boxflat has no RPM data to display.
+
 Send JSON with one of these formats:
 - `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
 - `{"rpm_percent": 50}` (0-100) or `{"rpm_ratio": 0.5}` (0.0-1.0)

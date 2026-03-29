@@ -58,7 +58,11 @@ class TelemetryBridge:
 
             sock.settimeout(1)
             print(f"Telemetry bridge listening on udp://{self._host}:{self._port}")
-            print("Telemetry bridge expects UDP JSON packets from a game adapter. Set BOXFLAT_TELEMETRY_DEBUG=1 for packet diagnostics.")
+            print(
+                "Telemetry bridge expects UDP JSON packets from a game adapter. "
+                "On Windows, Pit House can use game-specific plugins directly; Boxflat relies on this bridge input. "
+                "Set BOXFLAT_TELEMETRY_DEBUG=1 for packet diagnostics."
+            )
 
             while not self._shutdown.is_set():
                 try:
@@ -69,7 +73,8 @@ class TelemetryBridge:
                         if not hinted_no_packets and waited_for_packets >= NO_PACKET_HINT_SECONDS:
                             print(
                                 f"Telemetry bridge has not received packets on udp://{self._host}:{self._port} yet. "
-                                "Most games (including ACC) need an external telemetry adapter that forwards JSON to this port."
+                                "Most games (including ACC) need an external telemetry adapter that forwards JSON to this port "
+                                "instead of sending directly like Pit House plugins on Windows."
                             )
                             hinted_no_packets = True
                     continue
