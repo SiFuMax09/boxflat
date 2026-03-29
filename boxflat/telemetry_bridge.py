@@ -80,19 +80,20 @@ class TelemetryBridge:
                     print(f"Telemetry bridge received first packet from {source[0]}:{source[1]}")
                     has_received_packet = True
 
+                source_text = f"{source[0]}:{source[1]}"
                 mask = self._packet_to_mask(payload)
                 if mask is None:
-                    self._debug_log(f"dropped packet from {source[0]}:{source[1]}")
+                    self._debug_log(f"dropped packet from {source_text}")
                     continue
                 if mask == self._last_mask:
-                    self._debug_log(f"ignored duplicate mask {mask} from {source[0]}:{source[1]}")
+                    self._debug_log(f"ignored duplicate mask {mask} from {source_text}")
                     continue
 
                 self._last_mask = mask
                 # Wheel command payload is two bytes (LSB/MSB), while dash accepts full int mask.
                 self._cm.set_setting([mask & 255, mask >> 8], "wheel-send-rpm-telemetry")
                 self._cm.set_setting(mask, "dash-send-telemetry")
-                self._debug_log(f"forwarded mask {mask} from {source[0]}:{source[1]}")
+                self._debug_log(f"forwarded mask {mask} from {source_text}")
 
 
     def _packet_to_mask(self, payload: bytes) -> int | None:

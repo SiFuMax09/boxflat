@@ -62,7 +62,7 @@ This lets any game/tool drive the RPM indicator by forwarding telemetry in a sim
 - Start Boxflat from terminal with debug enabled:
   - `BOXFLAT_TELEMETRY_DEBUG=1 ./entrypoint.py --local`
 - Confirm you see: `Telemetry bridge listening on udp://127.0.0.1:<port>`
-- If you then see `has not received packets ...`, your game/adapter is not sending to Boxflat's UDP port.
+- If you then see `Telemetry bridge has not received packets ...`, your game/adapter is not sending to Boxflat's UDP port.
 - If you see `dropped packet ...`, incoming payload format is invalid; inspect the adapter payload and match one JSON format above.
 - If you only see `ignored duplicate mask ...`, your adapter is sending unchanged RPM mask values (often when game telemetry output is paused/disabled).
 
