@@ -54,6 +54,11 @@ Pit House can use game-specific plugins/integrations on Windows, while Boxflat o
 So Boxflat uses one generic input path: a local UDP JSON bridge.  
 If your game is not writing to that bridge, Boxflat has no RPM data to display.
 
+#### ACC specifics
+ACC telemetry is typically exposed via game UDP/shared-memory interfaces, while Boxflat listens only for local UDP JSON on `127.0.0.1:27194`.
+That means ACC data needs a small adapter layer (`ACC source -> Boxflat JSON bridge`) before Boxflat can show RPM LEDs.
+In practice, this is why tools on Windows can appear "direct" (game-specific integration), but Boxflat keeps one generic bridge input format across games.
+
 Send JSON with one of these formats:
 - `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
 - `{"rpm_percent": 50}` (0-100) or `{"rpm_ratio": 0.5}` (0.0-1.0)
