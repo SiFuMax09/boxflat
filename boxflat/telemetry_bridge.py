@@ -111,14 +111,13 @@ class TelemetryBridge:
                 self._debug_log("ignored packet: missing or invalid rpm/max_rpm")
                 return None
             ratio = rpm / max_rpm
-        elif ratio < 0 or ratio > 1:
-            self._debug_log("ignored packet: rpm_ratio outside 0.0-1.0")
-            return None
 
         if not math.isfinite(ratio):
             self._debug_log("ignored packet: non-finite rpm ratio")
             return None
-        ratio = max(0, min(1, ratio))
+        if ratio < 0 or ratio > 1:
+            self._debug_log("ignored packet: rpm ratio outside 0.0-1.0")
+            return None
         lit_leds = int(round(ratio * 10))
         return (1 << lit_leds) - 1 if lit_leds > 0 else 0
 
