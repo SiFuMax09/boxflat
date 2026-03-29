@@ -38,11 +38,43 @@ Boxflat for Moza Racing. Control your Moza gear settings... and more!
 | Generic devices | Detection fix | |
 
 ### Ideas
-- Telemetry ingestion through REST API/WebSockets
 - Cammus support
 - PXN Support
 - Simagic support
 - H-Pattern and Sequential settings available for arbitrary HID devices
+
+### Telemetry bridge (all racing games)
+Boxflat now listens for external telemetry on UDP `127.0.0.1:27194`.
+You can change this in the UI under **Other → Application settings** (`Enable telemetry bridge` and `Telemetry bridge UDP port`).
+On first launch, `BOXFLAT_TELEMETRY_PORT` is still respected as the initial default.
+Most games (including ACC) do not send this JSON format directly, so you must run/enable a telemetry adapter that forwards game telemetry to this UDP port.
+
+#### Why does Pit House on Windows show RPM directly?
+Pit House can use game-specific plugins/integrations on Windows, while Boxflat on Linux does not ship those closed game plugins.
+So Boxflat uses one generic input path: a local UDP JSON bridge.  
+If your game is not writing to that bridge, Boxflat has no RPM data to display.
+
+#### ACC specifics
+Boxflat now reads ACC RPM directly from ACC shared memory when available, and still supports the UDP JSON bridge on `127.0.0.1:27194`.
+So ACC can drive RPM LEDs without a separate adapter in the common local setup.
+If shared memory is unavailable, you can still use an external adapter that forwards JSON telemetry to the bridge port.
+
+Send JSON with one of these formats:
+- `{"rpm_led_mask": 31}` (direct 10-bit LED mask)
+- `{"rpm_percent": 50}` (0-100) or `{"rpm_ratio": 0.5}` (0.0-1.0)
+- `{"rpm": 5000, "max_rpm": 10000}`
+
+`rpm_led_mask` accepts arbitrary 10-bit patterns (not only progressive fill patterns), for example `{"rpm_led_mask": 682}` for an alternating LED pattern.
+
+This lets any game/tool drive the RPM indicator by forwarding telemetry in a simple common format.
+
+#### Troubleshooting (no RPM or blinking RPM)
+- Start Boxflat from terminal with debug enabled:
+  - `BOXFLAT_TELEMETRY_DEBUG=1 ./entrypoint.py --local`
+- Confirm you see: `Telemetry bridge listening on udp://127.0.0.1:<port>`
+- If you then see `Telemetry bridge has not received packets ...`, your game/adapter is not sending to Boxflat's UDP port.
+- If you see `dropped packet ...`, incoming payload format is invalid; inspect the adapter payload and match one JSON format above.
+- If you only see `ignored duplicate mask ...`, your adapter is sending unchanged RPM mask values (often when game telemetry output is paused/disabled).
 
 ### Firmware upgrades
 There are some EEPROM functions available, but I need to do more testing to make sure I won't brick anything. For now, just use Pit House on Windows if you can, as FW upgrade support is not coming in the near future.

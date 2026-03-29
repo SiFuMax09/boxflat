@@ -2,6 +2,7 @@
 
 from boxflat.connection_manager import MozaConnectionManager
 from boxflat.settings_handler import SettingsHandler
+from boxflat.telemetry_bridge import DEFAULT_TELEMETRY_ENABLED, DEFAULT_TELEMETRY_PORT
 from boxflat.panels import SettingsPanel
 from boxflat.widgets import *
 from boxflat.bitwise import *
@@ -82,6 +83,20 @@ class OtherSettings(SettingsPanel):
         fix_row.subscribe(lambda v: self._dispatch("moza-detection-fix-enabled", v))
         fix_row.subscribe(self._hid_handler.set_detection_fix_enabled)
         fix_row.set_value(self._settings.read_setting("moza-detection-fix-enabled"))
+
+        self._add_row(BoxflatSwitchRow("Enable telemetry bridge", "External game telemetry input"))
+        telemetry_enabled = self._read_setting_default("telemetry-bridge-enabled", DEFAULT_TELEMETRY_ENABLED)
+        self._current_row.set_value(telemetry_enabled)
+        self._current_row.subscribe(self._settings.write_setting, "telemetry-bridge-enabled")
+        self._current_row.subscribe(lambda *_: self._reload_telemetry_bridge())
+
+        telemetry_port = Adw.EntryRow()
+        telemetry_port.set_title("Telemetry bridge UDP port")
+        telemetry_port_value = self._read_setting_default("telemetry-bridge-port", DEFAULT_TELEMETRY_PORT)
+        telemetry_port.set_text(str(telemetry_port_value))
+        telemetry_port.connect("notify::has-focus", lambda widget, _pspec: self._validate_telemetry_port(widget))
+        telemetry_port.connect("apply", lambda widget: self._save_telemetry_port(widget))
+        self._add_row(telemetry_port)
 
         # Autostart and background stuff
         hidden = BoxflatSwitchRow("Start hidden")
@@ -181,3 +196,58 @@ class OtherSettings(SettingsPanel):
             None,
             lambda p, t: p.request_background_finish(t)
         )
+
+
+    def _validate_telemetry_port(self, row: Adw.EntryRow):
+        if row.has_focus():
+            return
+
+        valid, _ = self._get_valid_telemetry_port(row.get_text())
+        row.remove_css_class("error")
+        if not valid and row.get_text() != "":
+            row.add_css_class("error")
+
+
+    def _save_telemetry_port(self, row: Adw.EntryRow) -> None:
+        valid, result = self._get_valid_telemetry_port(row.get_text())
+        if not valid:
+            row.add_css_class("error")
+            self.show_toast(result, 2)
+            return
+
+        row.remove_css_class("error")
+        self._settings.write_setting(result, "telemetry-bridge-port")
+        self._reload_telemetry_bridge()
+
+
+    def _get_valid_telemetry_port(self, value: str) -> tuple[bool, int | str]:
+        if value == "":
+            return False, "Telemetry bridge port must not be empty"
+
+        try:
+            port = int(value)
+        except ValueError:
+            return False, "Telemetry bridge port must be a number"
+
+        if port < 1 or port > 65535:
+            return False, "Telemetry bridge port must be in range 1-65535"
+
+        return True, port
+
+
+    def _reload_telemetry_bridge(self) -> None:
+        if not self._application:
+            return
+
+        enabled = self._read_setting_default("telemetry-bridge-enabled", DEFAULT_TELEMETRY_ENABLED)
+        port = self._read_setting_default("telemetry-bridge-port", DEFAULT_TELEMETRY_PORT)
+
+        if hasattr(self._application, "reload_telemetry_bridge"):
+            self._application.reload_telemetry_bridge(enabled, port)
+
+
+    def _read_setting_default(self, key: str, default):
+        value = self._settings.read_setting(key)
+        if value is None:
+            return default
+        return value

@@ -10,7 +10,13 @@ from boxflat.panels import *
 from boxflat.connection_manager import MozaConnectionManager
 from boxflat.hid_handler import HidHandler
 from boxflat.settings_handler import SettingsHandler
-from threading import Thread, Event
+from boxflat.telemetry_bridge import (
+    TelemetryBridge,
+    get_telemetry_bridge_port,
+    DEFAULT_TELEMETRY_ENABLED,
+    DEFAULT_TELEMETRY_PORT
+)
+from threading import Thread, Event, Lock
 
 import os
 import subprocess
@@ -134,6 +140,7 @@ class MyApp(Adw.Application):
     def __init__(self, data_path: str, config_path: str, dry_run: bool, custom: bool, autostart: bool,**kwargs):
         super().__init__(**kwargs)
         self.connect('activate', self.on_activate)
+        self.connect('shutdown', self._shutdown)
 
         self.Tray = None
 
@@ -151,10 +158,24 @@ class MyApp(Adw.Application):
         self._config_path = config_path
         self._data_path = data_path
         self._held = Event()
+        self._telemetry_reload_lock = Lock()
 
         self._cm = MozaConnectionManager(os.path.join(data_path, "serial.yml"), dry_run)
         self._cm.subscribe("hid-device-connected", self._hid_handler.add_device)
         self._cm.subscribe("hid-device-disconnected", self._hid_handler.remove_device)
+        self._telemetry_bridge = None
+
+        telemetry_enabled = self._settings.read_setting("telemetry-bridge-enabled")
+        if telemetry_enabled is None:
+            telemetry_enabled = DEFAULT_TELEMETRY_ENABLED
+            self._settings.write_setting(telemetry_enabled, "telemetry-bridge-enabled")
+
+        telemetry_port = self._settings.read_setting("telemetry-bridge-port")
+        if telemetry_port is None:
+            telemetry_port = get_telemetry_bridge_port()
+            self._settings.write_setting(telemetry_port, "telemetry-bridge-port")
+
+        self.reload_telemetry_bridge(telemetry_enabled, telemetry_port)
 
         with open(os.path.join(data_path, "version"), "r") as version:
             self._version = version.readline().strip()
@@ -332,10 +353,31 @@ class MyApp(Adw.Application):
 
 
     def _shutdown(self, *_) -> None:
+        if self._telemetry_bridge:
+            self._telemetry_bridge.shutdown()
         for panel in self._panels.values():
             panel.shutdown()
 
         self._cm.shutdown()
+
+
+    def reload_telemetry_bridge(self, enabled: bool, port: int):
+        """Recreate telemetry bridge using updated settings.
+
+        :param enabled: whether telemetry bridge should run.
+        :param port: UDP port to bind for telemetry packets.
+        """
+        with self._telemetry_reload_lock:
+            if self._telemetry_bridge:
+                self._telemetry_bridge.shutdown()
+
+            try:
+                port = int(port)
+            except (TypeError, ValueError):
+                port = DEFAULT_TELEMETRY_PORT
+
+            port = max(1, min(65535, port))
+            self._telemetry_bridge = TelemetryBridge(self._cm, port=port, enabled=bool(enabled))
 
 
     def _activate_default(self) -> SettingsPanel:
