@@ -91,7 +91,11 @@ class TelemetryBridge:
             if not math.isfinite(direct_mask):
                 self._debug_log("ignored packet: rpm_led_mask is non-finite")
                 return None
-            return max(0, min(1023, int(direct_mask)))
+            try:
+                return max(0, min(1023, int(direct_mask)))
+            except (ValueError, OverflowError):
+                self._debug_log("ignored packet: invalid rpm_led_mask value")
+                return None
 
         ratio = self._first_number(data, "rpm_percent", "rpmPercent")
         if ratio is not None:
