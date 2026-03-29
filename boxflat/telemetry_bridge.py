@@ -16,6 +16,7 @@ PERCENT_SCALE = 100
 DEFAULT_TELEMETRY_PORT = 27194
 DEFAULT_TELEMETRY_ENABLED = True
 TELEMETRY_SHUTDOWN_TIMEOUT = 1
+NO_PACKET_HINT_SECONDS = 10
 
 
 class TelemetryBridge:
@@ -44,6 +45,10 @@ class TelemetryBridge:
 
 
     def _worker(self) -> None:
+        has_received_packet = False
+        hinted_no_packets = False
+        waited_for_packets = 0
+
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
             try:
                 sock.bind((self._host, self._port))
@@ -53,23 +58,41 @@ class TelemetryBridge:
 
             sock.settimeout(1)
             print(f"Telemetry bridge listening on udp://{self._host}:{self._port}")
+            print("Telemetry bridge expects UDP JSON packets from a game adapter. Set BOXFLAT_TELEMETRY_DEBUG=1 for packet diagnostics.")
 
             while not self._shutdown.is_set():
                 try:
-                    payload, _ = sock.recvfrom(4096)
+                    payload, source = sock.recvfrom(4096)
                 except socket.timeout:
+                    if not has_received_packet:
+                        waited_for_packets += 1
+                        if not hinted_no_packets and waited_for_packets >= NO_PACKET_HINT_SECONDS:
+                            print(
+                                f"Telemetry bridge has not received packets on udp://{self._host}:{self._port} yet. "
+                                "Most games (including ACC) need an external telemetry adapter that forwards JSON to this port."
+                            )
+                            hinted_no_packets = True
                     continue
                 except OSError:
                     break
 
+                if not has_received_packet:
+                    print(f"Telemetry bridge received first packet from {source[0]}:{source[1]}")
+                    has_received_packet = True
+
                 mask = self._packet_to_mask(payload)
-                if mask is None or mask == self._last_mask:
+                if mask is None:
+                    self._debug_log(f"dropped packet from {source[0]}:{source[1]}")
+                    continue
+                if mask == self._last_mask:
+                    self._debug_log(f"ignored duplicate mask {mask} from {source[0]}:{source[1]}")
                     continue
 
                 self._last_mask = mask
                 # Wheel command payload is two bytes (LSB/MSB), while dash accepts full int mask.
                 self._cm.set_setting([mask & 255, mask >> 8], "wheel-send-rpm-telemetry")
                 self._cm.set_setting(mask, "dash-send-telemetry")
+                self._debug_log(f"forwarded mask {mask} from {source[0]}:{source[1]}")
 
 
     def _packet_to_mask(self, payload: bytes) -> int | None:
